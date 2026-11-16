@@ -194,8 +194,8 @@
     const g = base.getContext('2d');
     const img = g.createImageData(W, H);
     const d = img.data;
-    const TOP = [183, 104, 93];    // dry rose
-    const BOT = [199, 148, 74];    // raw ochre
+    const TOP = [196, 98, 84];     // dry rose, a touch warmer
+    const BOT = [210, 144, 60];    // raw ochre, a touch warmer
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const t = y / H;
@@ -287,9 +287,9 @@
         const glow = dm * dm * 0.55;
         r += 26 * glow; gg += 14 * glow; b += 3 * glow;
 
-        // a waxy, low-gloss sheen along the rims of the dent
-        const spec = Math.pow(clamp(nx * -0.42 + ny * -0.58 + nz * 0.70, 0, 1), 8) * 0.22;
-        r += 255 * spec; gg += 222 * spec; b += 170 * spec;
+        // a waxy, low-gloss sheen along the rims of the dent — soft and warm
+        const spec = Math.pow(clamp(nx * -0.42 + ny * -0.58 + nz * 0.70, 0, 1), 5) * 0.18;
+        r += 255 * spec; gg += 202 * spec; b += 118 * spec;
 
         // the sheet is semi-translucent: the slab beneath shows through a little
         r = r * 0.91 + groundTex[i] * 0.09;

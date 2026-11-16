@@ -34,10 +34,11 @@ Model: a coarse height field, not particles.
   frame — do NOT take per-pixel finite differences of the coarse field, it
   aliases into feathery spikes.
 - Render is per-pixel into ImageData (800x800 ~2-3ms). Shading: normal from
-  (gx,gy) tilted toward upper-left light, diffuse ±, specular ~diff^16,
-  parallax offset of the base texture by 18px*nx,ny (the dent reveals the
-  ground below), thin-wax depth darkening toward umber, faint amber glow at
-  deep press.
+  (gx,gy) tilted toward upper-left light, diffuse ±, plus a separate soft
+  warm rim sheen: spec = pow(light-dot, 5) * 0.18, color (255,202,118) —
+  soft and amber, not a hard white spike. Parallax offset of the base
+  texture by 24px*nx,ny (the dent reveals the ground below), thin-wax depth
+  darkening toward umber, faint amber glow at deep press.
 - `groundTex` (captured once after painting) is the dark umber ground: base
   fill + three soft radial "lamp" pools + fine grain + a few hairline
   cracks. Composed over the ground at alpha ~0.91, then vignette.
@@ -45,11 +46,18 @@ Model: a coarse height field, not particles.
   + per-pixel grain * 0.97 * a diagonal lamp factor (upper-left +, lower-right
   -). Keep the mottle amplitudes low; the breathing shimmer is a slow 40px
   valNoise added to the normals (coeff ~0.006) — too high and it reads as
-  camouflage.
+  camouflage. Base colors (this sitting, warmed +1 sat): TOP rose
+  [196,98,84], BOT ochre [210,144,60] — roughly constant luminance, more
+  red, less blue/green.
 
 Tuning values that work: diffusion 0.24 (0.32+ is unstable and oscillates),
 lag 0.92^dt, heal 0.9965^dt, footprint R=52 sigma=R^2*0.35, light-steepness
-k=12, hover press 0.55, dm = h/1.2.
+k=12, hover press 0.55, dm = h/1.2, spec pow 5 x 0.18 in (255,202,118).
+
+Package note (this sitting): the task was a tone tweak of the existing
+per-pixel shader, so no new machinery. The pre-searched npm candidates
+(soft-body physics, WebGPU SSS shader engines, procedural noise) don't fit
+single-file 2D-canvas color/tonality work; nothing fetched.
 
 ## What works
 
@@ -74,10 +82,11 @@ k=12, hover press 0.55, dm = h/1.2.
 
 ## What's next (concretely)
 
-1. The Yield could use one more pass of tuning: the dimple reads slightly
-   soft/brown — try a touch more specular highlight on the rim and a slightly
-   warmer (less muddy) thin-wax color, then re-check with the pagecheck drag
-   recipe below.
+1. DONE (this sitting): dimple rim now has a soft warm sheen (spec pow 5 x
+   0.18, amber 255,202,118) and the wax base colors are slightly warmer / more
+   saturated (TOP [196,98,84], BOT [210,144,60]). Verified with pixel stats:
+   rim avg R-B went +94 -> +115, flat wax +87 -> +109, luminance roughly
+   held.
 2. A third piece when the mood is right — candidates from the opening brief:
    the weight of rain (drops that land and spread on a water sheet, could
    reuse wax.html's height-field pipeline with different material constants),
