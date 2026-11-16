@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Measuring of Soft Things — Mycelium Map</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #04060f; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="800"></canvas>
+<script>
+(function () {
+  const W = 800, H = 800, TAU = Math.PI * 2;
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+
+  // ---- deterministic randomness ----
+  let seed = 140701;
+  function rng() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  }
+  function rand(a, b) { return a + (b - a) * rng(); }
+  function gauss() { return (rng() + rng() + rng() - 1.5) * 0.8165; }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function mix(a, b, t) { return a + (b - a) * t; }
+
+  // ---- value noise ----
+  const perm = new Uint8Array(512);
+  (function () {
+    const p = [];
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = (rng() * (i + 1)) | 0;
+      const t = p[i]; p[i] = p[j]; p[j] = t;
+    }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  })();
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function valNoise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = fade(xf), v = fade(yf);
+    const A = perm[(xi + perm[yi & 255]) & 255] / 255;
+    const B = perm[(xi + 1 + perm[yi & 255]) & 255] / 255;
+    const C = perm[(xi + perm[(yi + 1) & 255]) & 255] / 255;
+    const D = perm[(xi + 1 + perm[(yi + 1) & 255]) & 255] / 255;
+    return lerp(lerp(A, B, u), lerp(C, D, u), v);
+  }
+  function fbm(x, y) {
+    let s = 0, a = 0.5, f = 1;
+    for (let o = 0; o < 4; o++) { s += a * valNoise(x * f, y * f); f *= 2; a *= 0.5; }
+    return s / 0.9375;
+  }
+
+  // ---- the network: grow a branching mycelium, then graft links ----
+  const nodes = [];
+  const links = [];
+  function addNode(x, y, size, ph, fr, depth) {
+    const n = { x, y, size, ph, fr, depth, ox: x, oy: y, vx: 0, vy: 0 };
+    nodes.push(n);
+    return n;
+  }
+  function grow(x, y, dir, dist, size, depth) {
+    if (depth > 7 || size < 0.35 || dist < 8) return;
+    const step = rand(10, 26);
+    dir += gauss() * 0.5;
+    let nx = x + Math.cos(dir) * step;
+    let ny = y + Math.sin(dir) * step;
+    if (nx < -30 || nx > W + 30 || ny < -30 || ny > H + 30) return;
+    const n = addNode(nx, ny, size, rng() * TAU, rand(0.25, 0.85), depth);
+    links.push({ a: nodes.length - 2, b: nodes.length - 1, d: step, pulse: rng() * TAU, pf: rand(0.3, 0.9) });
+    const nstep = dist - step;
+    if (nstep > 8 && rng() < 0.72) grow(nx, ny, dir, nstep, size * rand(0.85, 0.98), depth + 1);
+    if (rng() < 0.24) grow(nx, ny, dir + (rng() - 0.5) * 1.7, rand(40, 140), size * rand(0.6, 0.9), depth + 1);
+  }
+
+  (function build() {
+    let roots = 0;
+    while (roots < 6) {
+      const x = rand(80, W - 80), y = rand(80, H - 80);
+      let ok = true;
+      for (const n of nodes) if ((n.x - x) ** 2 + (n.y - y) ** 2 < 90 * 90) { ok = false; break; }
+      if (!ok) continue;
+      roots++;
+      const size = rand(1.7, 2.7);
+      addNode(x, y, size, rng() * TAU, rand(0.3, 0.7), 0);
+      const arms = 2 + ((rng() * 3) | 0);
+      for (let a = 0; a < arms; a++) {
+        const d = rng() * TAU;
+        grow(x, y, d, rand(160, 340), size, 1);
+      }
+    }
+    // grafted cross-links for that tangled, webbed character
+    for (let i = 0; i < 46; i++) {
+      const a = nodes[(rng() * nodes.length) | 0];
+      const b = nodes[(rng() * nodes.length) | 0];
+      if (a === b) continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d > 22 && d < 150) links.push({ a: nodes.indexOf(a), b: nodes.indexOf(b), d, pulse: rng() * TAU, pf: rand(0.3, 0.9), grafted: true });
+    }
+  })();
+
+  // ---- drifting spores (the dust) ----
+  const spores = [];
+  for (let i = 0; i < 170; i++) {
+    spores.push({ x: rng() * W, y: rng() * H, vx: 0, vy: 0, r: rand(0.4, 1.4), a: rand(0.25, 0.6), ph: rng() * TAU, fr: rand(0.2, 0.6) });
+  }
+
+  // ---- mouse ----
+  const mouse = { x: -9999, y: -9999, lx: -9999, ly: -9999, vx: 0, vy: 0 };
+  function toCanvas(e) {
+    const r = cvs.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
+  }
+  window.addEventListener('mousemove', (e) => {
+    const p = toCanvas(e);
+    mouse.x = p.x; mouse.y = p.y;
+  });
+  window.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
+
+  // ---- background: indigo to mossy green, drifting with the noise field ----
+  const INDIGO = [10, 14, 40];
+  const MOSS = [30, 54, 38];
+  const bg = document.createElement('canvas');
+  bg.width = 200; bg.height = 200;
+  const bgc = bg.getContext('2d');
+  const bgImg = bgc.createImageData(200, 200);
+  function paintBg(time) {
+    const d = bgImg.data;
+    for (let y = 0; y < 200; y++) {
+      for (let x = 0; x < 200; x++) {
+        const n = fbm(x / 90 + time * 0.02, y / 90 - time * 0.013);
+        const t = clamp((n - 0.28) / 0.44, 0, 1);
+        const i = (y * 200 + x) * 4;
+        d[i] = mix(INDIGO[0], MOSS[0], t);
+        d[i + 1] = mix(INDIGO[1], MOSS[1], t);
+        d[i + 2] = mix(INDIGO[2], MOSS[2], t);
+        d[i + 3] = 255;
+      }
+    }
+    bgc.putImageData(bgImg, 0, 0);
+  }
+
+  // ---- per-frame physics ----
+  const R = 115, R2 = R * R, K = 0.05;
+  function update(dt, time) {
+    mouse.vx = mouse.x - mouse.lx;
+    mouse.vy = mouse.y - mouse.ly;
+    mouse.lx = mouse.x; mouse.ly = mouse.y;
+    const mvx = clamp(mouse.vx * 1.5, -42, 42);
+    const mvy = clamp(mouse.vy * 1.5, -42, 42);
+    const damp = Math.pow(0.9, dt);
+
+    for (const n of nodes) {
+      let f = 0;
+      if (n.depth >= 1) {
+        const dx = n.x - mouse.x, dy = n.y - mouse.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < R2) {
+          const d = Math.sqrt(d2) || 1;
+          f = (1 - d / R) * (0.55 + n.depth * 0.12);
+          n.vx += (dx / d) * f * 3.0;
+          n.vy += (dy / d) * f * 3.0;
+          n.vx += mvx * f * 0.5;
+          n.vy += mvy * f * 0.5;
+        }
+      }
+      n.vx *= damp; n.vy *= damp;
+      n.x += n.vx * dt + (n.ox - n.x) * 0.03 * dt;
+      n.y += n.vy * dt + (n.oy - n.y) * 0.03 * dt;
+    }
+
+    for (const s of spores) {
+      const dx = s.x - mouse.x, dy = s.y - mouse.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < R2) {
+        const d = Math.sqrt(d2) || 1;
+        const f = (1 - d / R);
+        s.vx += (dx / d) * f * 4.2 + mvx * f * 0.9;
+        s.vy += (dy / d) * f * 4.2 + mvy * f * 0.9;
+      }
+      s.vx *= Math.pow(0.92, dt); s.vy *= Math.pow(0.92, dt);
+      s.x += s.vx * dt + Math.sin(time * s.fr + s.ph) * 0.12 * dt;
+      s.y += s.vy * dt + Math.cos(time * s.fr * 0.8 + s.ph) * 0.1 * dt;
+      if (s.x < 0) s.x += W; else if (s.x > W) s.x -= W;
+      if (s.y < 0) s.y += H; else if (s.y > H) s.y -= H;
+    }
+  }
+
+  // ---- render ----
+  function render(time) {
+    // background
+    ctx.save();
+    ctx.filter = 'blur(6px)';
+    ctx.drawImage(bg, 0, 0, W, H);
+    ctx.restore();
+    const vg = ctx.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, 560);
+    vg.addColorStop(0, 'rgba(4,6,16,0)');
+    vg.addColorStop(1, 'rgba(2,3,9,0.62)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    // additive glow layer
+    ctx.globalCompositeOperation = 'lighter';
+
+    // mycelium threads
+    for (const L of links) {
+      const a = nodes[L.a], b = nodes[L.b];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const g = fbm(mx / 170 + time * 0.05, my / 170 - time * 0.04);
+      const pulse = 0.5 + 0.5 * Math.sin(time * L.pf + L.pulse);
+      let al = (0.04 + 0.11 * pulse) * (0.35 + 0.65 * g);
+      if (L.grafted) al *= 0.65;
+      if (al < 0.01) continue;
+      ctx.strokeStyle = 'rgba(150,232,196,' + al.toFixed(3) + ')';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    // glowing nodes, each breathing on its own slow sine
+    for (const n of nodes) {
+      const g = fbm(n.x / 140 + time * 0.06, n.y / 140 + time * 0.04);
+      const b = 0.5 + 0.5 * Math.sin(time * n.fr + n.ph);
+      const inten = 0.15 + 0.85 * b * (0.35 + 0.65 * g);
+      const halo = 6 + n.size * 4.5 * (0.4 + b);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, halo);
+      grad.addColorStop(0, 'rgba(224,255,240,' + (0.5 * inten).toFixed(3) + ')');
+      grad.addColorStop(0.3, 'rgba(150,232,196,' + (0.26 * inten).toFixed(3) + ')');
+      grad.addColorStop(1, 'rgba(90,200,150,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, halo, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(238,255,246,' + (0.35 + 0.6 * inten).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, Math.max(0.5, n.size * (0.7 + 0.5 * b)), 0, TAU);
+      ctx.fill();
+    }
+
+    // spores
+    for (const s of spores) {
+      const b = 0.5 + 0.5 * Math.sin(time * s.fr + s.ph);
+      const a = s.a * (0.4 + 0.6 * b);
+      const halo = s.r * 5;
+      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, halo);
+      grad.addColorStop(0, 'rgba(220,255,235,' + (a * 0.9).toFixed(3) + ')');
+      grad.addColorStop(1, 'rgba(150,232,196,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, halo, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(236,255,246,' + a.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // quiet caption
+    ctx.fillStyle = 'rgba(150,180,160,0.4)';
+    ctx.font = 'italic 13px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('the mycelium map', 22, H - 22);
+    ctx.font = 'italic 11px Georgia, serif';
+    ctx.fillStyle = 'rgba(150,180,160,0.28)';
+    ctx.fillText('move through it gently — the dust remembers', 22, H - 8);
+  }
+
+  // ---- loop ----
+  let last = performance.now();
+  function frame(now) {
+    let dt = (now - last) / 16.6667;
+    last = now;
+    if (dt > 3) dt = 3;
+    const time = now / 1000;
+    paintBg(time);
+    update(dt, time);
+    render(time);
+    requestAnimationFrame(frame);
+  }
+  paintBg(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

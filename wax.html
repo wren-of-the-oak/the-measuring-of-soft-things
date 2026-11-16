@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Measuring of Soft Things — The Yield</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #140d09; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="800"></canvas>
+<script>
+(function () {
+  const W = 800, H = 800, TAU = Math.PI * 2;
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+
+  // ---- deterministic randomness ----
+  let seed = 220811;
+  function rng() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  }
+  function rand(a, b) { return a + (b - a) * rng(); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function mix(a, b, t) { return a + (b - a) * t; }
+
+  // ---- value noise (for the wax texture and its slow breathing) ----
+  const perm = new Uint8Array(512);
+  (function () {
+    const p = [];
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = (rng() * (i + 1)) | 0;
+      const t = p[i]; p[i] = p[j]; p[j] = t;
+    }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  })();
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function valNoise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = fade(xf), v = fade(yf);
+    const A = perm[(xi + perm[yi & 255]) & 255] / 255;
+    const B = perm[(xi + 1 + perm[yi & 255]) & 255] / 255;
+    const C = perm[(xi + perm[(yi + 1) & 255]) & 255] / 255;
+    const D = perm[(xi + 1 + perm[(yi + 1) & 255]) & 255] / 255;
+    return lerp(lerp(A, B, u), lerp(C, D, u), v);
+  }
+  function fbm(x, y) {
+    let s = 0, a = 0.5, f = 1;
+    for (let o = 0; o < 3; o++) { s += a * valNoise(x * f, y * f); f *= 2; a *= 0.5; }
+    return s / 0.875;
+  }
+
+  // ---- the wax: a height field that is pressed, diffuses, and slowly heals ----
+  const NX = 200, NY = 200, CW = W / NX, CH = H / NY;
+  const hCur = new Float32Array(NX * NY);
+  const hTgt = new Float32Array(NX * NY);
+  const hTmp = new Float32Array(NX * NY);
+  const gxArr = new Float32Array(NX * NY);
+  const gyArr = new Float32Array(NX * NY);
+  function gradField() {
+    for (let y = 0; y < NY; y++) {
+      const row = y * NX;
+      for (let x = 0; x < NX; x++) {
+        const i = row + x;
+        const l = x > 0 ? hCur[i - 1] : hCur[i];
+        const r = x < NX - 1 ? hCur[i + 1] : hCur[i];
+        const u = y > 0 ? hCur[i - NX] : hCur[i];
+        const d = y < NY - 1 ? hCur[i + NX] : hCur[i];
+        gxArr[i] = (r - l) / (2 * CW);
+        gyArr[i] = (d - u) / (2 * CH);
+      }
+    }
+  }
+
+  function fieldAt(f, x, y) {
+    const fx = clamp(x / CW, 0, NX - 1.001), fy = clamp(y / CH, 0, NY - 1.001);
+    const x0 = fx | 0, y0 = fy | 0, tx = fx - x0, ty = fy - y0;
+    const i = y0 * NX + x0;
+    return lerp(lerp(f[i], f[i + 1], tx), lerp(f[i + NX], f[i + NX + 1], tx), ty);
+  }
+
+  // ---- the pointer: smoothed, so the wax feels a moment behind the hand ----
+  const ptr = { x: -9999, y: -9999, ax: -9999, ay: -9999, vx: 0, vy: 0, down: false, on: false };
+  function toCanvas(cx, cy) {
+    const r = cvs.getBoundingClientRect();
+    return { x: (cx - r.left) * (W / r.width), y: (cy - r.top) * (H / r.height) };
+  }
+  window.addEventListener('pointermove', (e) => {
+    const p = toCanvas(e.clientX, e.clientY);
+    if (!ptr.on) { ptr.ax = p.x; ptr.ay = p.y; }
+    ptr.x = p.x; ptr.y = p.y; ptr.on = true;
+    ptr.down = e.buttons > 0;
+  });
+  window.addEventListener('pointerdown', (e) => {
+    const p = toCanvas(e.clientX, e.clientY);
+    if (!ptr.on) { ptr.ax = p.x; ptr.ay = p.y; }
+    ptr.x = p.x; ptr.y = p.y; ptr.on = true; ptr.down = true;
+  });
+  window.addEventListener('pointerup', () => { ptr.down = false; });
+  window.addEventListener('pointerleave', () => { ptr.on = false; ptr.down = false; });
+  document.addEventListener('mouseleave', () => { ptr.on = false; ptr.down = false; });
+
+  let strength = 0; // how hard the hand is currently pressing
+  function step(dt) {
+    // smoothed pointer chases the real one — the lag
+    const f = 1 - Math.pow(0.84, dt);
+    if (ptr.on) {
+      ptr.ax += (ptr.x - ptr.ax) * f;
+      ptr.ay += (ptr.y - ptr.ay) * f;
+    }
+    // press force: hovering leaves a shallow dimple, moving drags a deeper furrow
+    const sp = ptr.on ? Math.hypot(ptr.x - ptr.px, ptr.y - ptr.py) : 0;
+    ptr.px = ptr.x; ptr.py = ptr.y;
+    const press = ptr.on ? clamp(0.55 + sp * 0.13 + (ptr.down ? 0.9 : 0), 0.55, 2.4) : 0;
+    strength += (press - strength) * (1 - Math.pow(0.82, dt));
+
+    // the target holds the pressure footprint, and lets it fade slowly after the hand passes
+    const decayT = Math.pow(0.99, dt);
+    const R = 52, R2 = R * R, SIG2 = R2 * 0.35;
+    for (let i = 0; i < hTgt.length; i++) hTgt[i] *= decayT;
+    if (ptr.on && strength > 0.01) {
+      const cpx = ptr.ax, cpy = ptr.ay;
+      const gx1 = Math.max(0, Math.floor((cpx - R) / CW));
+      const gx0 = Math.min(NX - 1, Math.ceil((cpx + R) / CW));
+      const gy1 = Math.max(0, Math.floor((cpy - R) / CH));
+      const gy0 = Math.min(NY - 1, Math.ceil((cpy + R) / CH));
+      for (let gy = gy1; gy <= gy0; gy++) {
+        const dyp = (gy + 0.5) * CH - cpy;
+        for (let gx = gx1; gx <= gx0; gx++) {
+          const dxp = (gx + 0.5) * CW - cpx;
+          const d2 = dxp * dxp + dyp * dyp;
+          if (d2 > R2) continue;
+          const v = strength * Math.exp(-d2 / SIG2);
+          if (v > hTgt[gy * NX + gx]) hTgt[gy * NX + gx] = v;
+        }
+      }
+    }
+
+    // the wax follows the target with viscosity, spreads, and heals
+    const diff = 0.24, lag = 1 - Math.pow(0.92, dt), heal = Math.pow(0.9965, dt);
+    for (let y = 0; y < NY; y++) {
+      const row = y * NX;
+      for (let x = 0; x < NX; x++) {
+        const i = row + x;
+        const c = hCur[i];
+        const l = x > 0 ? hCur[i - 1] : c;
+        const r = x < NX - 1 ? hCur[i + 1] : c;
+        const u = y > 0 ? hCur[i - NX] : c;
+        const d = y < NY - 1 ? hCur[i + NX] : c;
+        const diffused = c + diff * (l + r + u + d - 4 * c);
+        hTmp[i] = diffused + (hTgt[i] - diffused) * lag;
+      }
+    }
+    for (let i = 0; i < hCur.length; i++) hCur[i] = hTmp[i] * heal;
+    gradField();
+  }
+
+  // ---- the ground: a dark umber slab, lit faintly from the upper left ----
+  const ground = document.createElement('canvas');
+  ground.width = W; ground.height = H;
+  (function paintGround() {
+    const g = ground.getContext('2d');
+    const lg = g.createLinearGradient(0, 0, 0, H);
+    lg.addColorStop(0, '#1d140d');
+    lg.addColorStop(0.55, '#170f0a');
+    lg.addColorStop(1, '#120b07');
+    g.fillStyle = lg;
+    g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 900; i++) {
+      const x = rng() * W, y = rng() * H, r = rand(0.4, 1.6);
+      const a = rand(0.015, 0.05);
+      g.fillStyle = rng() < 0.5 ? 'rgba(120,90,60,' + a + ')' : 'rgba(30,18,10,' + a + ')';
+      g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    }
+    // a faint pool of warm light, upper left, like a lamp out of frame
+    const rg = g.createRadialGradient(W * 0.32, H * 0.28, 60, W * 0.32, H * 0.28, 620);
+    rg.addColorStop(0, 'rgba(150,106,62,0.16)');
+    rg.addColorStop(1, 'rgba(150,106,62,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, W, H);
+  })();
+  const groundTex = ground.getContext('2d').getImageData(0, 0, W, H).data;
+
+  // ---- the wax texture: rose above, ochre below, mottled like cooled pigment ----
+  const base = document.createElement('canvas');
+  base.width = W; base.height = H;
+  const baseTex = (() => {
+    const g = base.getContext('2d');
+    const img = g.createImageData(W, H);
+    const d = img.data;
+    const TOP = [183, 104, 93];    // dry rose
+    const BOT = [199, 148, 74];    // raw ochre
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const t = y / H;
+        const m1 = fbm(x / 140, y / 140) - 0.5;
+        const m2 = fbm(x / 230 + 7.3, y / 230 + 2.1) - 0.5;
+        const m3 = fbm(x / 26 + 13.7, y / 26 + 5.2) - 0.5;
+        const lf = 1.05 - 0.20 * (0.7 * (x / W) + 0.3 * (y / H) - 0.5); // the lamp, from upper left
+        const v = (1 + m1 * 0.07 + m2 * 0.08 + m3 * 0.045 + (rng() - 0.5) * 0.06) * 0.97 * lf;
+        const i = (y * W + x) * 4;
+        d[i]     = (TOP[0] + (BOT[0] - TOP[0]) * t) * v;
+        d[i + 1] = (TOP[1] + (BOT[1] - TOP[1]) * t) * v;
+        d[i + 2] = (TOP[2] + (BOT[2] - TOP[2]) * t) * v;
+        d[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    // a few pale coolings — where the wax set a little lighter
+    for (let i = 0; i < 7; i++) {
+      const x = rand(60, W - 60), y = rand(60, H - 60), r = rand(50, 150);
+      const rg = g.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, 'rgba(228,176,128,0.10)');
+      rg.addColorStop(1, 'rgba(228,176,128,0)');
+      g.fillStyle = rg;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    // a couple of thin hairlines where it cracked cooling
+    for (let c = 0; c < 3; c++) {
+      let x = rand(0, W), y = rand(0, H), a = rand(0, TAU);
+      g.strokeStyle = 'rgba(58,32,20,' + rand(0.04, 0.08) + ')';
+      g.lineWidth = 0.8;
+      g.beginPath(); g.moveTo(x, y);
+      const segs = 6 + ((rng() * 6) | 0);
+      for (let s = 0; s < segs; s++) {
+        a += (rng() - 0.5) * 1.2;
+        x += Math.cos(a) * rand(24, 70);
+        y += Math.sin(a) * rand(24, 70);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    return g.getImageData(0, 0, W, H).data;
+  })();
+
+  // ---- soft blisters: old bubbles just under the surface ----
+  const blisters = [];
+  for (let i = 0; i < 5; i++) {
+    blisters.push({ x: rand(90, W - 90), y: rand(90, H - 90), r: rand(18, 44), ph: rng() * TAU, fr: rand(0.1, 0.3) });
+  }
+
+  const out = ctx.createImageData(W, H);
+  const od = out.data;
+
+  function render(time) {
+    // the breathing of the sheet — a very slow swell, so it is alive while still
+    const breathe = 0.85 + 0.15 * Math.sin(time * 0.21);
+    const k = 12; // normal steepness: how strongly the dents catch the light
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const h = fieldAt(hCur, x, y);
+        const gx = fieldAt(gxArr, x, y)
+                 + 0.006 * (valNoise(x / 40 + time * 0.05, y / 40 + 9) - 0.5) * 2 * breathe;
+        const gy = fieldAt(gyArr, x, y)
+                 + 0.006 * (valNoise(x / 40 + 31, y / 40 + time * 0.045) - 0.5) * 2 * breathe;
+        let nx = -gx * k, ny = -gy * k, nz = 1;
+        const il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+        nx *= il; ny *= il; nz *= il;
+
+        // light from the upper left
+        let diff = 0.60 + 0.52 * (nx * -0.42 + ny * -0.58 + nz * 0.70);
+        diff = clamp(diff, 0.2, 1.35);
+
+        // parallax into the texture, so depth reads even from the shading alone
+        const u = clamp(x + nx * 24, 0, W - 1) | 0;
+        const v = clamp(y + ny * 24, 0, H - 1) | 0;
+        const i = (y * W + x) * 4;
+        const ti = (v * W + u) * 4;
+        let r = baseTex[ti] * diff;
+        let gg = baseTex[ti + 1] * diff;
+        let b = baseTex[ti + 2] * diff;
+
+        // depth: as the wax thins, the ground beneath shows through the dent
+        const dm = clamp(h / 1.2, 0, 1);
+        const thin = 0.5 * dm;
+        r = r * (1 - thin) + groundTex[i] * 0.8 * thin;
+        gg = gg * (1 - thin) + groundTex[i + 1] * 0.8 * thin;
+        b = b * (1 - thin) + groundTex[i + 2] * 0.8 * thin;
+        // ...and at the bottom of a deep press, a little of the lamp light comes up through it
+        const glow = dm * dm * 0.55;
+        r += 26 * glow; gg += 14 * glow; b += 3 * glow;
+
+        // a waxy, low-gloss sheen along the rims of the dent
+        const spec = Math.pow(clamp(nx * -0.42 + ny * -0.58 + nz * 0.70, 0, 1), 8) * 0.22;
+        r += 255 * spec; gg += 222 * spec; b += 170 * spec;
+
+        // the sheet is semi-translucent: the slab beneath shows through a little
+        r = r * 0.91 + groundTex[i] * 0.09;
+        gg = gg * 0.91 + groundTex[i + 1] * 0.09;
+        b = b * 0.91 + groundTex[i + 2] * 0.09;
+        od[i] = r < 0 ? 0 : r > 255 ? 255 : r;
+        od[i + 1] = gg < 0 ? 0 : gg > 255 ? 255 : gg;
+        od[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+        od[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+
+    // glows and marks that sit on top of the surface
+    ctx.globalCompositeOperation = 'lighter';
+    for (const bl of blisters) {
+      const b = 0.5 + 0.5 * Math.sin(time * bl.fr + bl.ph);
+      ctx.save();
+      ctx.translate(bl.x, bl.y);
+      ctx.scale(1, 0.82);
+      const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, bl.r);
+      rg.addColorStop(0, 'rgba(255,214,158,' + (0.05 + 0.05 * b).toFixed(3) + ')');
+      rg.addColorStop(0.55, 'rgba(232,168,110,' + (0.028 + 0.03 * b).toFixed(3) + ')');
+      rg.addColorStop(1, 'rgba(232,168,110,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(0, 0, bl.r, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // the sheet's worn edge
+    const vg = ctx.createRadialGradient(W / 2, H / 2, 250, W / 2, H / 2, 610);
+    vg.addColorStop(0, 'rgba(10,6,4,0)');
+    vg.addColorStop(1, 'rgba(10,6,4,0.62)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    // quiet caption
+    ctx.fillStyle = 'rgba(224,192,160,0.55)';
+    ctx.font = 'italic 13px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('the yield', 22, H - 22);
+    ctx.font = 'italic 11px Georgia, serif';
+    ctx.fillStyle = 'rgba(224,192,160,0.38)';
+    ctx.fillText('press and drag — it remembers the weight a while', 22, H - 8);
+  }
+
+  // ---- loop ----
+  let last = performance.now();
+  function frame(now) {
+    let dt = (now - last) / 16.6667;
+    last = now;
+    if (dt > 3) dt = 3;
+    const time = now / 1000;
+    step(dt);
+    render(time);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
