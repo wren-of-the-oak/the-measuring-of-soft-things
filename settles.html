@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Measuring of Soft Things — What Settles</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #0b0806; overflow: hidden; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #06070a; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
   canvas { display: block; touch-action: none; }
 </style>
 </head>
@@ -71,46 +72,47 @@
 
   function paintScene() {
     const c = sc;
-    // room: near-black, warm
-    c.fillStyle = '#0a0705';
+    c.setTransform(S, 0, 0, S, 0, 0); // paint in 800x800 design coords
+    // room: near-black, cool — the seeds are the warm light in here
+    c.fillStyle = '#08090c';
     c.fillRect(0, 0, W, H);
     let g = c.createLinearGradient(0, 0, 520, 0);
-    g.addColorStop(0, 'rgba(72,48,28,0.30)');
-    g.addColorStop(1, 'rgba(72,48,28,0)');
+    g.addColorStop(0, 'rgba(46,58,74,0.32)');
+    g.addColorStop(1, 'rgba(46,58,74,0)');
     c.fillStyle = g; c.fillRect(0, 0, 520, H);
 
-    // lamp pool on the wall, upper left
+    // pale, desaturated blue mist pooling on the wall, upper left
     g = c.createRadialGradient(250, 150, 20, 250, 150, 430);
-    g.addColorStop(0, 'rgba(255,196,132,0.16)');
-    g.addColorStop(0.5, 'rgba(255,196,132,0.05)');
-    g.addColorStop(1, 'rgba(255,196,132,0)');
+    g.addColorStop(0, 'rgba(168,192,216,0.15)');
+    g.addColorStop(0.5, 'rgba(168,192,216,0.05)');
+    g.addColorStop(1, 'rgba(168,192,216,0)');
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     g = c.createRadialGradient(250, 150, 5, 250, 150, 170);
-    g.addColorStop(0, 'rgba(255,216,164,0.13)');
-    g.addColorStop(1, 'rgba(255,216,164,0)');
+    g.addColorStop(0, 'rgba(206,222,240,0.11)');
+    g.addColorStop(1, 'rgba(206,222,240,0)');
     c.fillStyle = g; c.fillRect(0, 0, W, H);
 
-    // table
+    // table, dark under the cool light
     g = c.createLinearGradient(0, 684, 0, H);
-    g.addColorStop(0, '#181009');
-    g.addColorStop(1, '#0b0704');
+    g.addColorStop(0, '#141210');
+    g.addColorStop(1, '#0a0a09');
     c.fillStyle = g; c.fillRect(0, 684, W, H - 684);
-    // lamp pool on the table
+    // mist pooling on the table
     g = c.createRadialGradient(300, 706, 10, 300, 706, 330);
-    g.addColorStop(0, 'rgba(216,150,88,0.13)');
-    g.addColorStop(1, 'rgba(216,150,88,0)');
+    g.addColorStop(0, 'rgba(150,178,206,0.12)');
+    g.addColorStop(1, 'rgba(150,178,206,0)');
     c.fillStyle = g; c.fillRect(0, 684, W, H - 684);
     // table edge catches the light
     g = c.createLinearGradient(0, 0, W, 0);
-    g.addColorStop(0, 'rgba(255,190,124,0.02)');
-    g.addColorStop(0.31, 'rgba(255,190,124,0.24)');
-    g.addColorStop(0.8, 'rgba(255,190,124,0)');
+    g.addColorStop(0, 'rgba(168,194,222,0.02)');
+    g.addColorStop(0.31, 'rgba(168,194,222,0.22)');
+    g.addColorStop(0.8, 'rgba(168,194,222,0)');
     c.fillStyle = g; c.fillRect(0, 683.4, W, 1.6);
-    // faint wood grain
+    // faint wood grain, lit cool
     c.lineWidth = 1;
     for (let i = 0; i < 9; i++) {
       const y = 702 + i * 11 + rand(-3, 3);
-      c.strokeStyle = 'rgba(255,196,132,' + (0.012 + rand(0, 0.018)).toFixed(3) + ')';
+      c.strokeStyle = 'rgba(168,194,222,' + (0.012 + rand(0, 0.018)).toFixed(3) + ')';
       c.beginPath();
       c.moveTo(0, y);
       for (let x = 0; x <= W; x += 80) c.lineTo(x, y + Math.sin(x * 0.013 + i * 2.1) * 2.2);
@@ -135,7 +137,7 @@
     g.addColorStop(0.3, '#5c4324');
     g.addColorStop(1, '#150e08');
     c.fillStyle = g; c.fillRect(394, 390, 12, 162);
-    c.fillStyle = 'rgba(255,206,142,0.4)';
+    c.fillStyle = 'rgba(186,206,226,0.32)';
     c.fillRect(396.4, 392, 1.1, 158);
 
     // tray: interior (the mouth), then near face
@@ -151,17 +153,17 @@
     g.addColorStop(0, 'rgba(0,0,0,0.55)');
     g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g; c.fillRect(300, 370, 200, 16);
-    // lamp pool landing in the dish floor
+    // cool mist landing in the dish floor
     g = c.createRadialGradient(372, 382, 4, 372, 382, 48);
-    g.addColorStop(0, 'rgba(255,186,122,0.10)');
-    g.addColorStop(1, 'rgba(255,186,122,0)');
+    g.addColorStop(0, 'rgba(150,178,206,0.08)');
+    g.addColorStop(1, 'rgba(150,178,206,0)');
     c.fillStyle = g; c.fillRect(300, 370, 200, 22);
     c.restore();
     // far rim line
     trayCurve(c, farY);
     g = c.createLinearGradient(308, 0, 492, 0);
-    g.addColorStop(0, 'rgba(208,154,98,0.6)');
-    g.addColorStop(1, 'rgba(132,96,62,0.30)');
+    g.addColorStop(0, 'rgba(178,188,204,0.55)');
+    g.addColorStop(1, 'rgba(94,86,80,0.30)');
     c.strokeStyle = g; c.lineWidth = 1.4; c.stroke();
 
     trayFront(c);
@@ -173,10 +175,10 @@
     g.addColorStop(0.45, '#251b12');
     g.addColorStop(1, '#140f0a');
     c.fillStyle = g; c.fill();
-    // left edge catches light
+    // left edge catches the cool light
     g = c.createLinearGradient(328, 0, 356, 0);
-    g.addColorStop(0, 'rgba(255,192,124,0.12)');
-    g.addColorStop(1, 'rgba(255,192,124,0)');
+    g.addColorStop(0, 'rgba(168,194,222,0.10)');
+    g.addColorStop(1, 'rgba(168,194,222,0)');
     rr(c, 328, 548, 144, 124, 16); c.fillStyle = g; c.fill();
     // right edge falls into dark
     g = c.createLinearGradient(444, 0, 472, 0);
@@ -185,8 +187,8 @@
     rr(c, 328, 548, 144, 124, 16); c.fillStyle = g; c.fill();
     // top edge highlight
     g = c.createLinearGradient(340, 0, 462, 0);
-    g.addColorStop(0, 'rgba(255,198,132,0.32)');
-    g.addColorStop(1, 'rgba(255,198,132,0.10)');
+    g.addColorStop(0, 'rgba(172,196,224,0.30)');
+    g.addColorStop(1, 'rgba(172,196,224,0.10)');
     c.fillStyle = g; c.fillRect(342, 549.2, 118, 1.6);
 
     // dial
@@ -204,7 +206,7 @@
     g.addColorStop(1, '#2c1c0f');
     c.fillStyle = g; c.beginPath(); c.arc(400, 608, DIAL.rOut, 0, TAU); c.fill();
     c.lineWidth = 1.4;
-    c.strokeStyle = 'rgba(255,222,166,0.55)';
+    c.strokeStyle = 'rgba(216,226,238,0.55)';
     c.beginPath(); c.arc(400, 608, DIAL.rOut, Math.PI * 0.98, Math.PI * 1.58); c.stroke();
     c.strokeStyle = 'rgba(0,0,0,0.4)';
     c.beginPath(); c.arc(400, 608, DIAL.rOut, -Math.PI * 0.02, Math.PI * 0.55); c.stroke();
@@ -218,7 +220,7 @@
       const a = lerp(DIAL.A0, DIAL.A1, i / 40);
       const major = i % 10 === 0;
       const r1 = major ? 34 : 37.5;
-      c.strokeStyle = major ? 'rgba(233,206,168,0.85)' : 'rgba(233,206,168,0.30)';
+      c.strokeStyle = major ? 'rgba(226,218,198,0.85)' : 'rgba(226,218,198,0.30)';
       c.lineWidth = major ? 1.8 : 1;
       c.beginPath();
       c.moveTo(400 + Math.cos(a) * 42, 608 + Math.sin(a) * 42);
@@ -227,17 +229,17 @@
     }
     c.font = '10px Georgia, serif';
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillStyle = 'rgba(233,206,168,0.78)';
+    c.fillStyle = 'rgba(226,218,198,0.78)';
     for (let i = 0; i <= 40; i += 10) {
       const a = lerp(DIAL.A0, DIAL.A1, i / 40);
       c.fillText(String(i), 400 + Math.cos(a) * 25.5, 608 + Math.sin(a) * 25.5 + 0.5);
     }
     // glass sheen, faint, upper left
-    c.strokeStyle = 'rgba(255,232,200,0.05)';
+    c.strokeStyle = 'rgba(214,228,240,0.05)';
     c.lineWidth = 7;
     c.beginPath(); c.arc(400, 608, 39, Math.PI * 1.05, Math.PI * 1.45); c.stroke();
     c.font = '8px Georgia, serif';
-    c.fillStyle = 'rgba(222,192,152,0.34)';
+    c.fillStyle = 'rgba(198,206,214,0.34)';
     c.fillText('S O F T   W E I G H T', 400, 667.5);
     c.restore();
 
@@ -248,8 +250,8 @@
     g.addColorStop(1, '#110c08');
     c.fillStyle = g; c.fill();
     g = c.createLinearGradient(314, 0, 486, 0);
-    g.addColorStop(0, 'rgba(255,198,132,0.30)');
-    g.addColorStop(1, 'rgba(255,198,132,0.05)');
+    g.addColorStop(0, 'rgba(172,196,224,0.30)');
+    g.addColorStop(1, 'rgba(172,196,224,0.05)');
     c.fillStyle = g; c.fillRect(316, 665.2, 168, 1.5);
   }
 
@@ -257,17 +259,32 @@
   function trayFront(c) {
     trayFrontPath(c);
     const g = c.createLinearGradient(0, 379, 0, 395);
-    g.addColorStop(0, '#4b3620');
+    g.addColorStop(0, '#463828');
     g.addColorStop(1, '#16100a');
     c.fillStyle = g; c.fill();
     trayCurve(c, nearY);
     const g2 = c.createLinearGradient(308, 0, 492, 0);
-    g2.addColorStop(0, 'rgba(255,206,142,0.55)');
-    g2.addColorStop(1, 'rgba(255,206,142,0.10)');
+    g2.addColorStop(0, 'rgba(186,204,224,0.50)');
+    g2.addColorStop(1, 'rgba(122,134,150,0.12)');
     c.strokeStyle = g2; c.lineWidth = 1.8; c.stroke();
   }
 
-  paintScene();
+  // ---------------- fit to the window: design space stays 800x800 ----------------
+  // All drawing uses 800x800 coordinates; S maps them to the real pixel buffer,
+  // so the dial, ticks and prose stay crisp at any window size.
+  let S = 1;
+  function resize() {
+    const cssSize = Math.max(240, Math.floor(Math.min(window.innerWidth, window.innerHeight)));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    S = (cssSize * dpr) / W;
+    cvs.width = cvs.height = Math.round(cssSize * dpr);
+    cvs.style.width = cvs.style.height = cssSize + 'px';
+    scene.width = scene.height = cvs.width;
+    seed0 = 190407; // same grain on every repaint
+    paintScene();
+  }
+  window.addEventListener('resize', resize);
+  resize();
 
   // ---------------- matter: seeds fall and settle into the pan ----------------
   const engine = Engine.create();
@@ -403,14 +420,16 @@
   // ---------------- render ----------------
   function render(t) {
     const c = ctx;
-    c.drawImage(scene, 0, 0);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(scene, 0, 0); // scene is already at full pixel resolution
+    c.setTransform(S, 0, 0, S, 0, 0); // dynamic passes use 800x800 design coords
 
     // motes
     for (const m of motes) {
       const d = Math.hypot(m.x - 250, m.y - 150);
       const a = m.a * clamp(1 - d / 430, 0, 1) * (0.6 + 0.4 * Math.sin(t * 0.5 + m.ph));
       if (a < 0.008) continue;
-      c.fillStyle = 'rgba(255,226,190,' + a.toFixed(3) + ')';
+      c.fillStyle = 'rgba(190,208,228,' + a.toFixed(3) + ')';
       c.beginPath(); c.arc(m.x, m.y, m.r, 0, TAU); c.fill();
     }
 
@@ -422,17 +441,17 @@
       cx /= n; cy /= n;
       const boost = state === 'hold' ? 1.3 : 1;
       let g = c.createRadialGradient(cx, cy, 6, cx, cy, 74 + 1.1 * n);
-      g.addColorStop(0, 'rgba(255,168,92,' + Math.min(0.22, 0.026 * n * boost).toFixed(3) + ')');
-      g.addColorStop(1, 'rgba(255,168,92,0)');
+      g.addColorStop(0, 'rgba(255,142,58,' + Math.min(0.26, 0.032 * n * boost).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,142,58,0)');
       c.fillStyle = g; c.fillRect(cx - 160, cy - 160, 320, 320);
       g = c.createRadialGradient(cx, cy, 2, cx, cy, 26 + 0.5 * n);
-      g.addColorStop(0, 'rgba(255,196,128,' + Math.min(0.32, 0.05 * n * boost).toFixed(3) + ')');
-      g.addColorStop(1, 'rgba(255,196,128,0)');
+      g.addColorStop(0, 'rgba(255,178,84,' + Math.min(0.38, 0.06 * n * boost).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,178,84,0)');
       c.fillStyle = g; c.fillRect(cx - 100, cy - 100, 200, 200);
       // a little of it falls down on the stem
       g = c.createRadialGradient(400, 404, 4, 400, 404, 64);
-      g.addColorStop(0, 'rgba(255,182,112,' + Math.min(0.28, 0.010 * n).toFixed(3) + ')');
-      g.addColorStop(1, 'rgba(255,182,112,0)');
+      g.addColorStop(0, 'rgba(255,166,80,' + Math.min(0.28, 0.010 * n).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,166,80,0)');
       c.fillStyle = g; c.fillRect(336, 340, 128, 130);
     }
 
@@ -442,19 +461,19 @@
       const fl = clamp(s.fade * (0.82 + 0.18 * Math.sin(t * s.fr + s.ph)) * (1 + s.flash), 0, 1.6);
       const hr = s.r * 3.8;
       const g = c.createRadialGradient(x, y, 0, x, y, hr);
-      g.addColorStop(0, 'rgba(255,216,164,' + (0.50 * fl).toFixed(3) + ')');
-      g.addColorStop(0.3, 'rgba(255,172,98,' + (0.26 * fl).toFixed(3) + ')');
-      g.addColorStop(1, 'rgba(255,172,98,0)');
+      g.addColorStop(0, 'rgba(255,202,120,' + (0.52 * fl).toFixed(3) + ')');
+      g.addColorStop(0.3, 'rgba(255,148,62,' + (0.30 * fl).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,148,62,0)');
       c.fillStyle = g;
       c.beginPath(); c.arc(x, y, hr, 0, TAU); c.fill();
-      c.fillStyle = 'rgba(255,238,204,' + Math.min(1, 0.92 * fl).toFixed(3) + ')';
+      c.fillStyle = 'rgba(255,226,158,' + Math.min(1, 0.92 * fl).toFixed(3) + ')';
       c.beginPath(); c.arc(x, y, s.r * 0.9, 0, TAU); c.fill();
     }
 
     // landings
     for (const rp of ripples) {
       const k = (t - rp.t0) / 0.6;
-      c.strokeStyle = 'rgba(255,196,128,' + (0.22 * (1 - k)).toFixed(3) + ')';
+      c.strokeStyle = 'rgba(255,178,92,' + (0.24 * (1 - k)).toFixed(3) + ')';
       c.lineWidth = 1;
       c.beginPath();
       c.ellipse(rp.x, FLOOR_Y - 1, 5 + k * 10, 1.5 + k * 2.4, 0, 0, TAU);
@@ -526,15 +545,15 @@
     c.globalCompositeOperation = 'lighter';
     const la = 0.012 + 0.007 * (0.5 + 0.5 * Math.sin(t * 0.19));
     let vg = c.createRadialGradient(250, 150, 20, 250, 150, 430);
-    vg.addColorStop(0, 'rgba(255,196,132,' + la.toFixed(4) + ')');
-    vg.addColorStop(1, 'rgba(255,196,132,0)');
+    vg.addColorStop(0, 'rgba(168,196,226,' + la.toFixed(4) + ')');
+    vg.addColorStop(1, 'rgba(168,196,226,0)');
     c.fillStyle = vg; c.fillRect(0, 0, W, H);
     c.globalCompositeOperation = 'source-over';
 
     // vignette
     vg = c.createRadialGradient(400, 390, 240, 400, 390, 590);
-    vg.addColorStop(0, 'rgba(4,2,1,0)');
-    vg.addColorStop(1, 'rgba(4,2,1,0.55)');
+    vg.addColorStop(0, 'rgba(2,4,7,0)');
+    vg.addColorStop(1, 'rgba(2,4,7,0.58)');
     c.fillStyle = vg; c.fillRect(0, 0, W, H);
   }
 
