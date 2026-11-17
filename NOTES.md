@@ -24,6 +24,58 @@ system; keep them siblings.
   drop glowing seeds onto the pan; a dial needle sinks with cumulative mass.
   Responsive canvas (800x800 design space, scaled to fit the window), warm/cool
   light pass. Physics: Matter.js from `lib/matter-js/`.
+- `rain.html` — 04 The Weight of Rain. A thin glassy water sheet over a dark
+  stream bed; the pointer (and occasional uninvited ambient drops) strike it
+  into dent+crown ripples that run outward and linger for seconds. WebAudio
+  wet-tick on strikes. Same single-IIFE, 800x800 style as wax.
+
+## rain.html — The Weight of Rain (architecture)
+
+Model: the wax height-field pipeline, re-tuned glassy. Same updater shape
+(hCur chases hTgt, explicit diffusion, per-cell heal, grid-level gradField
+for normals, per-pixel render) — no new solver. The difference is what gets
+stamped and the constants.
+- The pointer stamps a **dipole**, not a blob: a dent `−s·exp(−d²/2·8.5²)`
+  plus a displaced-water crown ring `+1.3s·exp(−(d−24)²/2·9.5²)` (R=48).
+  Fast diffusion fatters the dent's edge and the ring outward — that IS the
+  outward motion; there is no wave-equation velocity term.
+- Stamp rule is signed max/min: `v<0 → hTgt=min(hTgt,v)`, `v>0 → hTgt=max`.
+  A moving pointer leaves full-strength ripples at every position (comet
+  trails that fuse into bands, which reads as water).
+- Tuning that works: grid 240×240 (finer than wax's 200), diff 0.29 (fast,
+  near the 0.32 stability edge), lag 1−0.80^dt (snappy, nothing viscous),
+  hTgt decay 0.998^dt + hCur heal 0.9992^dt ("very little healing": half-life
+  ~6s, fieldMax 0.84 → 0.61 over ~7s in tests), press = clamp(0.16 + sp·0.05
+  + down·0.5, 0.16, 1.2).
+- Render: k=18 normal steepness, light (−0.32,−0.44,0.84); diff =
+  0.72+0.36·ndl so the slate bed + pebbles show through (thin sheet);
+  parallax 30px; whisper of cool tint; glassy spec = pow(ndl,28)·(0.30+
+  1.4·(1−nz))·0.9 in (225,238,255) — fresnel-brightened at grazing tilt,
+  and the dent bottoms catch a crisp specular dot (physically right: a
+  concave bottom mirrors the ceiling). Breath noise 0.004, slower than wax's.
+- Bed: dark blue-slate gradient, cool upper-left lamp pool, 13 soft pebble
+  ellipses with a faint upper-edge gleam, silt glints, per-pixel fbm mottle.
+- Ambient rain: a drop at a random position (s 0.16–0.4) every 1.6–5.0s,
+  first one ~1.1s in, so the sheet is alive before anyone touches it.
+- Sound (`tick(gain, pan)`): AudioContext created ONLY on pointerdown
+  (autoplay policy); a slice of a 0.3s white-noise buffer through a
+  band-pass (700·(1.4..4.8) Hz, Q 1.2..5.7, playbackRate 0.7..1.6) + a low
+  sine thump (150..340 Hz falling to 55% pitch). Every parameter jittered
+  per strike; gain 0.035+0.055·s for pointer, ~0.03–0.05 for ambient.
+  `maybeTick` gates with a random 0.09–0.33s gap + 45% coin flip → a drag
+  patters like scattered drops, never a metronome. Pan = (x/W·2−1)·0.55.
+  Ambient drops before the first click are silent (no context yet) — that's
+  fine, they're uninvited.
+- `window.__rain.drop(x,y,s)` / `.info()` → { strikes, fieldMax, audio }.
+
+Package note: searched getlib for "water ripple", "ripple height field
+simulation", "wave field interaction" (plus the pre-searched glass-ripple).
+Nothing fits: glass-ripple is an 11-pass WebGL2 hero shader with AI brand
+icons + CRT scanlines (needs three.js, wrong look entirely); jquery.ripples
+distorts a background image, not a height field; rain-ripple (40 dl/wk) is a
+self-contained decorative animation. The existing wax.html pipeline is the
+machinery; the sitting was constants + stamp shape + WebAudio (browser
+built-in). Nothing fetched.
 
 ## wax.html — The Yield (architecture)
 
@@ -108,8 +160,12 @@ nothing cropped); mycelium + wax at 800×600 (centered squares, no errors).
 - The settle scale: seeds drop, clatter, settle; the needle sinks with a
   spring wobble per impact; mass accumulates past the dial's 40 mark; the
   warm/cool split makes the pile read as its own light source.
+- The water sheet: strikes dent + crown the surface, the rings fatten and
+  run outward via fast diffusion, and linger for several seconds (fieldMax
+  0.84 → 0.61 over ~7s) before slowly flattening; ambient drops keep it
+  alive while still; the tick plays on pointerdown and sparsely on drags.
 - Collection structure: index.html as the front door, one file per piece.
-- All four pages load with no console errors (checked with pagecheck +
+- All five pages load with no console errors (checked with pagecheck +
   screenshots; caption text verified present via pixel readback).
 
 ## Pitfalls hit (don't repeat)
@@ -132,14 +188,14 @@ nothing cropped); mycelium + wax at 800×600 (centered squares, no errors).
 
 ## Next / open threads
 
-1. **New piece: "The Weight of Rain"** — drops land on a water sheet, spread
-   as concentric ripples; could reuse wax.html's height-field pipeline with
-   different material constants (less healing, faster diffusion, ripple
-   normals). Alternative: "the architecture of a held breath" (slow
-   concentric pressure rings that pause, hold, release).
+1. **New piece: "the architecture of a held breath"** — slow concentric
+   pressure rings that pause, hold, release. Could reuse the same height-field
+   pipeline with a slow breathing stamp (the rain dipole with CROWN→negative
+   and a 4-second swell) — or a pure-shader approach.
 2. Audio: a soft tick per impact on the settle scale, lower tone as the
    needle sinks (WebAudio, no assets); the mycelium pulse could get a faint
-   hum.
+   hum. (The rain tick in rain.html is the template: noise-splash + pitch
+   fall, all jittered.)
 3. Consider a shared prologue/epilogue prose pattern once 3+ pieces exist —
    the settle scale already has one (the "each one, alone, is almost nothing"
    line).
@@ -147,6 +203,18 @@ nothing cropped); mycelium + wax at 800×600 (centered squares, no errors).
    transform-based responsive treatment settles.html now has.
 
 ## Test recipe (pagecheck)
+
+```
+pagecheck rain.html --wait 0.4 \
+  --eval "window.dispatchEvent(new PointerEvent('pointerdown',{clientX:200,clientY:300,buttons:1,bubbles:true}));let i=0;window.__drag=setInterval(()=>{i++;window.dispatchEvent(new PointerEvent('pointermove',{clientX:200+i*30,clientY:300+Math.sin(i*0.5)*60,buttons:1,bubbles:true}));if(i>13){clearInterval(window.__drag);window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true}));}},55);" \
+  --wait 0.5 --shot /tmp/r1.png \
+  --eval "window.__rain.drop(560,540,0.7)" --wait 0.3 --shot /tmp/r2.png \
+  --wait 6 --eval "JSON.stringify(window.__rain.info())" --shot /tmp/r3.png
+```
+(`__rain.drop(x,y,s)` forces a strike + tick; `info()` → { strikes, fieldMax,
+audio }. audio goes true only after a real pointerdown. Sound can't be heard
+in pagecheck — the check is that the graph constructs and tick() runs ~160
+times without uncaught errors.)
 
 ```
 pagecheck wax.html --wait 0.5 \
